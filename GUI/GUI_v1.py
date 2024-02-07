@@ -20,11 +20,55 @@
 """
 
 import PySimpleGUI as sg
-import cv2
+#import cv2
 import numpy as np
-from Deprecated import easycall as easycall
-from Vision import vision as vision
-import FTPInterface as ftp
+#from Deprecated import easycall as easycall
+#from Vision import vision as vision
+#import FTPInterface as ftp
+
+import pygame
+import numpy as np
+import math
+
+class Arm2Link:
+    def __init__(self, screen, len1, len2, base_x, base_y):
+        self.screen = screen
+        self.len1 = len1
+        self.len2 = len2
+        self.base_x = base_x
+        self.base_y = base_y
+        self.q1 = 0  # Angle of the first link
+        self.q2 = 0  # Angle of the second link
+
+    def calculate_angles(self, end_x, end_y):
+        # Convert end effector position to polar coordinates
+        r = math.sqrt(end_x**2 + end_y**2)
+        phi = math.atan2(end_y, end_x)
+        # Using the cosine law to find the angles
+        cos_q2 = (r**2 - self.len1**2 - self.len2**2) / (2 * self.len1 * self.len2)
+        self.q2 = math.acos(cos_q2)  # Angle for the second link
+        sin_q2 = math.sqrt(1 - cos_q2**2)
+        self.q1 = phi - math.atan2((self.len2 * sin_q2), (self.len1 + self.len2 * cos_q2))  # Angle for the first link
+
+    def draw_arm(self):
+        # Calculate the joint position based on the angles
+        joint_x = self.base_x + self.len1 * math.cos(self.q1)
+        joint_y = self.base_y + self.len1 * math.sin(self.q1)
+        end_x = joint_x + self.len2 * math.cos(self.q1 + self.q2)
+        end_y = joint_y + self.len2 * math.sin(self.q1 + self.q2)
+
+        # Draw the arm: base -> joint -> end effector
+        pygame.draw.line(self.screen, (0, 0, 0), (self.base_x, self.base_y), (joint_x, joint_y), 5)
+        pygame.draw.line(self.screen, (0, 0, 0), (joint_x, joint_y), (end_x, end_y), 5)
+
+        print(math.degrees(self.q1), math.degrees(self.q2))
+
+    def update_end_effector_position(self):
+        # Calculate the end effector's position based on the current angles
+        joint_x = self.base_x + self.len1 * math.cos(self.q1)
+        joint_y = self.base_y + self.len1 * math.sin(self.q1)
+        self.end_x = joint_x + self.len2 * math.cos(self.q1 + self.q2)
+        self.end_y = joint_y + self.len2 * math.sin(self.q1 + self.q2)
 
 
 
@@ -52,7 +96,7 @@ def reportSent(success, code):
 # https://user-images.githubusercontent.com/46163555/71361827-2a01b880-2562-11ea-9af8-2c264c02c3e8.jpg
 sg.theme('BlueMono')
 
-cap = cv2.VideoCapture(0)       # select webcam input
+#cap = cv2.VideoCapture(0)       # select webcam input
 recording = True                # Bool that tracks whether to read from webcam
 final_img = None                # img to be sent to CV. Should be RGB numpy matrix
 frame = None                    # image last captured from webcam
@@ -65,12 +109,13 @@ width = 642                     # Default width of video capture
 com = 'COM4'                    # Serial Communication Port to send data over.
 baud = 115200                   # baud rate to use
 
-# Default OpenCV values:
+'''# Default OpenCV values:
 color1 = int(0x0000ff)
 color2 = int(0x00ff00)
 color3 = int(0xff0000)
 colorPalette = [(color1 >> 16,  color1 % (2**16) >> 8, color1 % (2**8)), (color2 >> 16, (color2 % (2**16)) >> 8,
                 color2 % (2**8)), (color3 >> 16,  (color3 % (2**16)) >> 8, color3 % (2**8))]
+'''
 
 granularity = 1
 maxLines = 100
@@ -112,16 +157,25 @@ tab2 = [
              sg.Input(size=(21, 1), key='dim1', default_text="279"),
              sg.Input(size=(21, 1), key='dim2', default_text="215")],
 
-            [sg.Button('Apply', key='apply')]]
+            [sg.Button('Apply', key='apply')],
+            [sg.Text('Robot Arm Visualization:')],
+            [sg.Graph(canvas_size=(600, 400), graph_bottom_left=(0, 0), graph_top_right=(600, 400), background_color='white', key='GRAPH', enable_events=True)]
 
+]
 # Putting everything together into a single window.
 layout = [
-            [sg.TabGroup([[sg.Tab('Main Interface', tab1), sg.Tab('OpenCV Settings', tab2)]])],
-            [sg.Output(size=(80, 10), font='Verdana 10')],
-            [sg.Button('Exit', key='exit')]]
+    [sg.TabGroup([[sg.Tab('Main Interface', tab1), sg.Tab('OpenCV Settings', tab2)]])],
+    [sg.Output(size=(80, 10), font='Verdana 10')],
+    [sg.Button('Exit', key='exit')]
+]
 
 # Can only call this once. Opens a window.
 window = sg.Window('Robot Arm Interface', layout, location=(200, 0))
+
+graph = window['GRAPH']  # type: sg.Graph
+
+arm = Arm2Link(graph, 200, 200, 500, 300)  # Initialize the arm with the graph element
+
 
 # Continue looping forever.
 while True:
@@ -144,7 +198,7 @@ while True:
         window['retake'].update(disabled=True)
         window['inputbox'].update("")
         values['inputbox'] = ""
-    elif event == 'sendimg':        # Routine for when "Send Image" button is pressed.
+    '''elif event == 'sendimg':        # Routine for when "Send Image" button is pressed.
         print("Sending image to OpenCV...")
         #easycall.streamFromImage(final_img, colorPalette, granularity, maxLines, paperSize, reportDone,
                                  #easycall.giveCommand(reportSend), reportSent, easycall.serialStream(com, baud))
@@ -153,13 +207,13 @@ while True:
         gcodeFile.write(gcode)
         gcodeFile.close()
 
-        stdout, stderr = ftp.executeGCodeSFTP("img.gcode")
+        #stdout, stderr = ftp.executeGCodeSFTP("img.gcode")
         print(stdout)
     elif event == 'sendGcode':      # Routine for when "Send GCode File" button is pressed.
         print("Sending GCode...")
         #gcode = open(file_path).read()
 
-        stdout, stderr = ftp.executeGCodeSFTP(file_path)
+        #stdout, stderr = ftp.executeGCodeSFTP(file_path)
         print(stdout)
         #easycall.streamFromGcode(gcode, reportDone, easycall.giveCommand(reportSend), reportSent,
                                  #easycall.serialStream(com, baud))
@@ -184,10 +238,10 @@ while True:
     # Update image displayed in GUI
     if recording:  # Only update webcam image when in live video mode
         # From https://github.com/PySimpleGUI/PySimpleGUI/blob/master/DemoPrograms/Demo_OpenCV_Webcam.py example
-        ret, frame = cap.read()
+        #ret, frame = cap.read()
         height = frame.shape[0]
         width = frame.shape[1]
-        imgbytes = cv2.imencode('.png', frame)[1].tobytes()
+        #imgbytes = cv2.imencode('.png', frame)[1].tobytes()
         window['image'].update(data=imgbytes)
     file_path = str(values['inputbox'])
     if file_path.lower().endswith(('.png')):  # If a .png file is selected, enable sending image data.
@@ -207,7 +261,18 @@ while True:
                                                                                 # sending GCode
         window['sendGcode'].update(disabled=False)
     else:
-        window['sendGcode'].update(disabled=True)
+        window['sendGcode'].update(disabled=True)'''
+
+    mouse_pos = values['GRAPH']
+
+    if mouse_pos == (None, None):  # Check if mouse is within the graph area
+            continue
+
+    target_x, target_y = mouse_pos[0] - arm.base_x, 300 - mouse_pos[1]  # Adjust for coordinate system
+    arm.calculate_angles(target_x, target_y)
+    arm.draw_arm()
+
+        
 
 # Close window when loop is broken.
 window.close()
