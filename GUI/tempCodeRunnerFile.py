@@ -1,0 +1,1 @@
+from Deprecated import easycall as easycall
