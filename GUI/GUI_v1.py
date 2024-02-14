@@ -30,45 +30,42 @@ import pygame
 import numpy as np
 import math
 
-class Arm2Link:
-    def __init__(self, screen, len1, len2, base_x, base_y):
-        self.screen = screen
-        self.len1 = len1
-        self.len2 = len2
-        self.base_x = base_x
-        self.base_y = base_y
-        self.q1 = 0  # Angle of the first link
-        self.q2 = 0  # Angle of the second link
+from Arm import Arm2Link
 
-    def calculate_angles(self, end_x, end_y):
-        # Convert end effector position to polar coordinates
-        r = math.sqrt(end_x**2 + end_y**2)
-        phi = math.atan2(end_y, end_x)
-        # Using the cosine law to find the angles
-        cos_q2 = (r**2 - self.len1**2 - self.len2**2) / (2 * self.len1 * self.len2)
-        self.q2 = math.acos(cos_q2)  # Angle for the second link
-        sin_q2 = math.sqrt(1 - cos_q2**2)
-        self.q1 = phi - math.atan2((self.len2 * sin_q2), (self.len1 + self.len2 * cos_q2))  # Angle for the first link
 
-    def draw_arm(self):
-        # Calculate the joint position based on the angles
-        joint_x = self.base_x + self.len1 * math.cos(self.q1)
-        joint_y = self.base_y + self.len1 * math.sin(self.q1)
-        end_x = joint_x + self.len2 * math.cos(self.q1 + self.q2)
-        end_y = joint_y + self.len2 * math.sin(self.q1 + self.q2)
+class DrawInteractive():
+    def __init__(self, graph, arm):
+        self.reading_movements = False
+        self.saved_movements = []
+        self.graph = graph
+        self.arm = arm
 
-        # Draw the arm: base -> joint -> end effector
-        pygame.draw.line(self.screen, (0, 0, 0), (self.base_x, self.base_y), (joint_x, joint_y), 5)
-        pygame.draw.line(self.screen, (0, 0, 0), (joint_x, joint_y), (end_x, end_y), 5)
+    def clear_movements(self):
+        self.saved_movements = []
+    
+    def add_point(self, x, y):
+        self.saved_movements.append([x, y])
+        print("Point added to Draw Interactive: ", x, y)
 
-        print(math.degrees(self.q1), math.degrees(self.q2))
+    def execute_picture(self):
 
-    def update_end_effector_position(self):
-        # Calculate the end effector's position based on the current angles
-        joint_x = self.base_x + self.len1 * math.cos(self.q1)
-        joint_y = self.base_y + self.len1 * math.sin(self.q1)
-        self.end_x = joint_x + self.len2 * math.cos(self.q1 + self.q2)
-        self.end_y = joint_y + self.len2 * math.sin(self.q1 + self.q2)
+        return self.saved_movements
+
+        
+
+def draw_base_rectangle(graph, width, height, border_thickness=2, color='gray'):
+
+    # Calculate the top left corner of the rectangle
+    rect_x = 500 - width // 2
+    rect_y = 500 - height
+
+    # Draw the rectangle
+    graph.DrawRectangle((rect_x, rect_y), (rect_x + width, rect_y + height), line_color=color, line_width=border_thickness)
+
+
+def execute_command():
+
+
 
 
 
@@ -122,7 +119,9 @@ maxLines = 100
 paperSize = (279, 215)
 
 # Main tab for selecting data to send
-tab1 = [[sg.Text('Capture a webcam image, upload an image, or upload a GCode file.')],
+tab1 = [
+
+        [sg.Text('Capture a webcam image, upload an image, or upload a GCode file.')],
 
         [sg.Text('Upload an image or GCode file:'), sg.Input(key='inputbox'),
          sg.FileBrowse(key='browse', file_types=(("Image Files", "*.png"),
@@ -137,34 +136,39 @@ tab1 = [[sg.Text('Capture a webcam image, upload an image, or upload a GCode fil
 
         [sg.Text("Send Output:\t"),
          sg.Button("Send Image", key="sendimg", disabled=True),
-         sg.Button("Send GCode File", key="sendGcode", disabled=True)]]
+         sg.Button("Send GCode File", key="sendGcode", disabled=True)]
+         
+]
 
-# Tab dedicated to the many OpenCV settings.
+# Tab dedicated to manually entering drawbot commands.
 tab2 = [
-            [sg.Text('Enter computer vision parameters', key='cv_text')],
+        [sg.Text('Enter drawing interactive parameters', key='db_text')],
 
-            [sg.Text('Color Palette (6 digit hex)', size=(40, 1)),
-             sg.Input(size=(13, 1), key='color1', default_text="0000FF"),
-             sg.Input(size=(13, 1), key='color2', default_text="00FF00"),
-             sg.Input(size=(13, 1), key='color3', default_text="FF0000")],
+        [sg.Text('Color Palette (6 digit hex)', size=(40, 1)),
+            sg.Input(size=(13, 1), key='color1', default_text="0000FF"),
+            sg.Input(size=(13, 1), key='color2', default_text="00FF00"),
+            sg.Input(size=(13, 1), key='color3', default_text="FF0000")],
 
-            [sg.Text('Granularity (float between 1 and 50)', size=(40, 1)),
-             sg.Input(key='granularity', default_text="1")],
+        [sg.Text('Granularity (float between 1 and 50)', size=(40, 1)),
+            sg.Input(key='granularity', default_text="1")],
 
-            [sg.Text('Max Lines (int between 1 and 1000)', size=(40, 1)), sg.Input(key='maxlines', default_text="100")],
+        [sg.Text('Max Lines (int between 1 and 1000)', size=(40, 1)), sg.Input(key='maxlines', default_text="100")],
 
-            [sg.Text('Paper Size in mm (int in [10, 279], int in [10, 215])', size=(40, 1)),
-             sg.Input(size=(21, 1), key='dim1', default_text="279"),
-             sg.Input(size=(21, 1), key='dim2', default_text="215")],
+        [sg.Text('Paper Size in mm (int in [10, 279], int in [10, 215])', size=(40, 1)),
+            sg.Input(size=(21, 1), key='dim1', default_text="279"),
+            sg.Input(size=(21, 1), key='dim2', default_text="215")],
 
-            [sg.Button('Apply', key='apply')],
-            [sg.Text('Robot Arm Visualization:')],
-            [sg.Graph(canvas_size=(600, 400), graph_bottom_left=(0, 0), graph_top_right=(600, 400), background_color='white', key='GRAPH', enable_events=True)]
+        [sg.Button('Apply', key='apply')],
+        [sg.Text('Robot Arm Visualization:')],
+        [sg.Graph(canvas_size=(600, 400), graph_bottom_left=(0, 0), graph_top_right=(600, 400), background_color='white', key='-GRAPH-', enable_events=True, drag_submits=True)],
+        [sg.Button('Start Reading', key='start-read')],
+        [sg.Button('Process Contents', key='process-drawing')]
 
 ]
+
 # Putting everything together into a single window.
 layout = [
-    [sg.TabGroup([[sg.Tab('Main Interface', tab1), sg.Tab('OpenCV Settings', tab2)]])],
+    [sg.TabGroup([[sg.Tab('Main Interface', tab1), sg.Tab('interactive Drawing', tab2)]])],
     [sg.Output(size=(80, 10), font='Verdana 10')],
     [sg.Button('Exit', key='exit')]
 ]
@@ -172,9 +176,11 @@ layout = [
 # Can only call this once. Opens a window.
 window = sg.Window('Robot Arm Interface', layout, location=(200, 0))
 
-graph = window['GRAPH']  # type: sg.Graph
+graph = window['-GRAPH-']  # type: sg.Graph
 
 arm = Arm2Link(graph, 200, 200, 500, 300)  # Initialize the arm with the graph element
+
+draw_interactive = DrawInteractive(graph, arm)
 
 
 # Continue looping forever.
@@ -183,96 +189,30 @@ while True:
     event, values = window.read(timeout=20)
     if event in (None, 'exit'):     # If window is closed or exit button pressed, close program.
         break
-    elif event == 'capimg':         # Routine for when "Capture Image" button is pressed.
-        recording = False
-        final_img = frame
-        window['imgtext'].update('Image to use:')
-        window['sendimg'].update(disabled=False)
-        window['capimg'].update(disabled=True)
-        window['retake'].update(disabled=False)
-    elif event == 'retake':         # Routine for when "Clear Image" button is pressed.
-        recording = True
-        window['imgtext'].update('Webcam Output:')
-        window['sendimg'].update(disabled=True)
-        window['capimg'].update(disabled=False)
-        window['retake'].update(disabled=True)
-        window['inputbox'].update("")
-        values['inputbox'] = ""
-    '''elif event == 'sendimg':        # Routine for when "Send Image" button is pressed.
-        print("Sending image to OpenCV...")
-        #easycall.streamFromImage(final_img, colorPalette, granularity, maxLines, paperSize, reportDone,
-                                 #easycall.giveCommand(reportSend), reportSent, easycall.serialStream(com, baud))
-        gcode = vision.asGCode(final_img, colorPalette, granularity, maxLines, paperSize)
-        gcodeFile = open("img.gcode", "w")
-        gcodeFile.write(gcode)
-        gcodeFile.close()
+    elif event == '-GRAPH-':  # Check if the event is from the Graph element
 
-        #stdout, stderr = ftp.executeGCodeSFTP("img.gcode")
-        print(stdout)
-    elif event == 'sendGcode':      # Routine for when "Send GCode File" button is pressed.
-        print("Sending GCode...")
-        #gcode = open(file_path).read()
+        x, y = values['-GRAPH-']
+        print('Mouse moved to:', x, y)
 
-        #stdout, stderr = ftp.executeGCodeSFTP(file_path)
-        print(stdout)
-        #easycall.streamFromGcode(gcode, reportDone, easycall.giveCommand(reportSend), reportSent,
-                                 #easycall.serialStream(com, baud))
-    elif event == 'apply':          # Routine for when "Apply" button is pressed.
-        print("Saved OpenCV Settings:")
-
-        # Update all OpenCV settings
-        color1 = int(values['color1'], 16)
-        color2 = int(values['color2'], 16)
-        color3 = int(values['color3'], 16)
-        colorPalette = [(color1 >> 16, color1 % (2 ** 16) >> 8, color1 % (2 ** 8)),
-                        (color2 >> 16, (color2 % (2 ** 16)) >> 8,
-                         color2 % (2 ** 8)), (color3 >> 16, (color3 % (2 ** 16)) >> 8, color3 % (2 ** 8))]
-        print("Color Palette: {}".format(colorPalette))
-        granularity = float(values['granularity'])
-        print("Granularity: {}".format(granularity))
-        maxLines = int(values['maxlines'])
-        print("Max Lines: {}".format(maxLines))
-        paperSize = (float(values['dim1']), float(values['dim2']))
-        print("Paper Size: {}".format(paperSize))
-
-    # Update image displayed in GUI
-    if recording:  # Only update webcam image when in live video mode
-        # From https://github.com/PySimpleGUI/PySimpleGUI/blob/master/DemoPrograms/Demo_OpenCV_Webcam.py example
-        #ret, frame = cap.read()
-        height = frame.shape[0]
-        width = frame.shape[1]
-        #imgbytes = cv2.imencode('.png', frame)[1].tobytes()
-        window['image'].update(data=imgbytes)
-    file_path = str(values['inputbox'])
-    if file_path.lower().endswith(('.png')):  # If a .png file is selected, enable sending image data.
-        #window['sendimgfile'].update(disabled=False)
-        tempimg = cv2.imread(file_path)
-        final_img = tempimg
-        dim = (min(int(tempimg.shape[1]/tempimg.shape[0]*height), width), height)
-        final_img_disp = cv2.resize(tempimg, dim, interpolation=cv2.INTER_LANCZOS4)
-        final_imgbytes = cv2.imencode('.png', final_img_disp)[1].tobytes()
-        window['image'].update(data=final_imgbytes)
-        recording = False
-        window['imgtext'].update('Image to use:')
-        window['sendimg'].update(disabled=False)
-        window['capimg'].update(disabled=True)
-        window['retake'].update(disabled=False)
-    if file_path.lower().endswith(('.txt', '.gcode', '.mpt', '.mpf', '.nc')):   # If a GCode file is selected, enable
-                                                                                # sending GCode
-        window['sendGcode'].update(disabled=False)
-    else:
-        window['sendGcode'].update(disabled=True)'''
-
-    mouse_pos = values['GRAPH']
-
-    if mouse_pos == (None, None):  # Check if mouse is within the graph area
+        if (x, y) == (None, None):  # Check if mouse is within the graph area
             continue
 
-    target_x, target_y = mouse_pos[0] - arm.base_x, 300 - mouse_pos[1]  # Adjust for coordinate system
-    arm.calculate_angles(target_x, target_y)
-    arm.draw_arm()
+        #arm.calculate_angles(target_x, target_y)
+        arm.calculate_angles(x, y)
+        draw_base_rectangle(window['-GRAPH-'], 400, 300)
+        arm.draw_arm()
+        if draw_interactive.reading_movements == True: 
+            draw_interactive.add_point(x, y)
 
-        
+    elif event == 'start-read': 
+        x, y = values['-GRAPH-']
+        draw_interactive.reading_movements = True
+    
+    elif event == 'process-drawing':
+        #process drawing
+
+
+
 
 # Close window when loop is broken.
 window.close()
