@@ -7,8 +7,8 @@ import math
 
 
 class Arm2Link:
-    def __init__(self, graph, len1, len2, base_x, base_y):
-        self.graph = graph
+    def __init__(self, screen, len1, len2, base_x, base_y):
+        self.screen = screen
         self.len1 = len1
         self.len2 = len2
         self.base_x = base_x
@@ -27,23 +27,17 @@ class Arm2Link:
         self.q1 = phi - math.atan2((self.len2 * sin_q2), (self.len1 + self.len2 * cos_q2))  # Angle for the first link
 
     def draw_arm(self):
-        # Clear previous drawings
-        self.graph.Erase()
-        
-        # Your existing arm drawing logic adapted for PySimpleGUI
-        joint_x = self.base_x + self.len1 * math.cos(self.q1)
-        joint_y = self.base_y - self.len1 * math.sin(self.q1)  # Note the coordinate system difference
-        end_x = joint_x + self.len2 * math.cos(self.q1 + self.q2)
-        end_y = joint_y - self.len2 * math.sin(self.q1 + self.q2)
-
         # Draw base rectangle
         rect_width, rect_height = 100, 50
-        self.graph.DrawRectangle((self.base_x - rect_width // 2, self.base_y), (self.base_x + rect_width // 2, self.base_y - rect_height), line_color='gray', line_width=2)
-
+        pygame.draw.rect(self.screen, (200, 200, 200), (self.base_x - rect_width // 2, self.base_y, rect_width, rect_height))
+        
         # Draw arm
-        self.graph.DrawLine((self.base_x, self.base_y), (joint_x, joint_y), color='black', width=5)
-        self.graph.DrawLine((joint_x, joint_y), (end_x, end_y), color='black', width=5)
-
+        joint_x = self.base_x + self.len1 * math.cos(self.q1)
+        joint_y = self.base_y + self.len1 * math.sin(self.q1)
+        end_x = joint_x + self.len2 * math.cos(self.q1 + self.q2)
+        end_y = joint_y + self.len2 * math.sin(self.q1 + self.q2)
+        pygame.draw.line(self.screen, (0, 0, 0), (self.base_x, self.base_y), (int(joint_x), int(joint_y)), 5)
+        pygame.draw.line(self.screen, (0, 0, 0), (int(joint_x), int(joint_y)), (int(end_x), int(end_y)), 5)
 
     def update_end_effector_position(self):
         # Calculate the end effector's position based on the current angles
