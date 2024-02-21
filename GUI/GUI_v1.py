@@ -63,7 +63,7 @@ def draw_base_rectangle(graph, width, height, border_thickness=2, color='gray'):
     graph.DrawRectangle((rect_x, rect_y), (rect_x + width, rect_y + height), line_color=color, line_width=border_thickness)
 
 
-def execute_command():
+#def execute_command():
 
 
 
@@ -208,8 +208,9 @@ while True:
         x, y = values['-GRAPH-']
         draw_interactive.reading_movements = True
     
-    elif event == 'process-drawing':
+    #elif event == 'process-drawing':
         #process drawing
+
 
 
 

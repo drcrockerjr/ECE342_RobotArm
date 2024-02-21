@@ -2,9 +2,14 @@
 import numpy as np
 import math
 
+import json
+import serial
+import time
+from pprint import pprint
+
 
 class Arm2Link:
-    def __init__(self, graph, len1, len2, base_x, base_y):
+    def __init__(self, graph, len1, len2, base_x, base_y, q1_step_angle, q2_step_angle ):
         self.graph = graph
         self.len1 = len1
         self.len2 = len2
@@ -14,6 +19,18 @@ class Arm2Link:
         self.end_y = base_y + 10
         self.q1 = 0  # Angle of the first link
         self.q2 = 0  # Angle of the second link
+
+        # Stepper motor angles moved per step:
+        #   Nema 17 - 1.8 degrees
+        self.q1_step_angle = q1_step_angle
+        self.q2_step_angle = q2_step_angle
+
+        self.movement_buffer = []
+
+
+    def set_end_effector_position(self, x, y):
+        self.end_x = x
+        self.end_y = y
 
     def calculate_angles(self, end_x, end_y):
 
@@ -37,6 +54,7 @@ class Arm2Link:
         self.q2 = math.acos(cos_q2)  # Angle for the second link
         sin_q2 = math.sqrt(1 - cos_q2**2)
         self.q1 = phi - math.atan2((self.len2 * sin_q2), (self.len1 + self.len2 * cos_q2))  # Angle for the first link
+
 
     def draw_arm(self):
         # Clear previous drawings
