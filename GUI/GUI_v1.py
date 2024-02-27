@@ -26,9 +26,12 @@ import numpy as np
 #from Vision import vision as vision
 #import FTPInterface as ftp
 
-import pygame
+#import pygame
 import numpy as np
 import math
+import queue
+import serial
+import json
 
 from Arm import Arm2Link
 
@@ -40,18 +43,22 @@ class DrawInteractive():
         self.graph = graph
         self.arm = arm
 
-    def clear_movements(self):
-        self.saved_movements = []
     
     def add_point(self, x, y):
         self.saved_movements.append([x, y])
-        print("Point added to Draw Interactive: ", x, y)
+        #print("Point added to Draw Interactive: ", x, y)
 
     def execute_picture(self):
 
         return self.saved_movements
 
-        
+
+#def write_buffer_serial(serial, buffer):  
+#    for json_packet in buffer: 
+#        serial.write(json_packet.encode())
+#
+#    buffer.clear() #clear buffer when movements have been pushed ot arduino
+
 
 def draw_base_rectangle(graph, width, height, border_thickness=2, color='gray'):
 
@@ -64,10 +71,6 @@ def draw_base_rectangle(graph, width, height, border_thickness=2, color='gray'):
 
 
 #def execute_command():
-
-
-
-
 
 # An unused test function to demonstrate functionality of the GUI.
 def test_func(colorPalette, granularity, maxlines, papersize):
@@ -94,17 +97,7 @@ def reportSent(success, code):
 sg.theme('BlueMono')
 
 #cap = cv2.VideoCapture(0)       # select webcam input
-recording = True                # Bool that tracks whether to read from webcam
-final_img = None                # img to be sent to CV. Should be RGB numpy matrix
-frame = None                    # image last captured from webcam
-ret = None                      # Bool that indicates if image capture is successful
-imgbytes = None                 # byte array of image
 file_path = ""                  # File path in the file browser input box
-height = 482                    # Default height of video capture
-width = 642                     # Default width of video capture
-
-com = 'COM4'                    # Serial Communication Port to send data over.
-baud = 115200                   # baud rate to use
 
 '''# Default OpenCV values:
 color1 = int(0x0000ff)
@@ -114,22 +107,25 @@ colorPalette = [(color1 >> 16,  color1 % (2**16) >> 8, color1 % (2**8)), (color2
                 color2 % (2**8)), (color3 >> 16,  (color3 % (2**16)) >> 8, color3 % (2**8))]
 '''
 
+
+
 granularity = 1
 maxLines = 100
 paperSize = (279, 215)
+
 
 # Main tab for selecting data to send
 tab1 = [
 
         [sg.Text('Capture a webcam image, upload an image, or upload a GCode file.')],
 
-        [sg.Text('Upload an image or GCode file:'), sg.Input(key='inputbox'),
-         sg.FileBrowse(key='browse', file_types=(("Image Files", "*.png"),
-                                                 ("GCode Files", "*.txt *.gcode *.mpt *.mpf *.nc")))],
+        #[sg.Text('Upload an image or GCode file:'), sg.Input(key='inputbox'),
+        # sg.FileBrowse(key='browse', file_types=(("Image Files", "*.png"),
+        #                                         ("GCode Files", "*.txt *.gcode *.mpt *.mpf *.nc")))],
 
         [sg.Text('Webcam output:', key='imgtext')],
 
-        [sg.Image(filename='', key='image')],
+        #[sg.Image(filename='', key='image')],
 
         [sg.Text('Camera Controls:\t'),
          sg.Button('Capture Image', key='capimg'), sg.Button('Clear Image', key='retake', disabled=True)],
@@ -169,51 +165,59 @@ tab2 = [
 # Putting everything together into a single window.
 layout = [
     [sg.TabGroup([[sg.Tab('Main Interface', tab1), sg.Tab('interactive Drawing', tab2)]])],
+    #[sg.TabGroup([[ sg.Tab('interactive Drawing', tab2)]])],
     [sg.Output(size=(80, 10), font='Verdana 10')],
     [sg.Button('Exit', key='exit')]
 ]
 
+#Serial Configuarations
+com = 'COM4'                    # Serial Communication Port to send data over.
+baud = 115200                   # baud rate to use
+
+'''serial = serial.Serial(com, baud,
+                       timeout=2.5,
+                       parity=serial.PARITY_NONE,
+                       bytesize=serial.EIGHTBITS,
+                       stopbits=serial.STOPBITS_ONE
+                       )'''
+
+move_buffer = []
+
 # Can only call this once. Opens a window.
-window = sg.Window('Robot Arm Interface', layout, location=(200, 0))
+window = sg.Window('Robot Arm Interface', layout, location=(200, 0), finalize=True)
 
 graph = window['-GRAPH-']  # type: sg.Graph
 
-arm = Arm2Link(graph, 200, 200, 500, 300)  # Initialize the arm with the graph element
+arm = Arm2Link( 200, 200, 500, 300, 1.8, 1.8)  # Initialize the arm with the graph element
 
-draw_interactive = DrawInteractive(graph, arm)
+#draw_interactive = DrawInteractive(graph, arm)
 
 
 # Continue looping forever.
 while True:
     # Check for events, update values
-    event, values = window.read(timeout=20)
+    event, values = window.read(timeout=40)
     if event in (None, 'exit'):     # If window is closed or exit button pressed, close program.
         break
     elif event == '-GRAPH-':  # Check if the event is from the Graph element
-
         x, y = values['-GRAPH-']
-        print('Mouse moved to:', x, y)
-
         if (x, y) == (None, None):  # Check if mouse is within the graph area
             continue
+        if 0 <= x <= 400 and 0 <= y <= 600:  # Replace graph_width and graph_height with the actual dimensions of your graph
+            arm.calculate_angles(x, y)
+            draw_base_rectangle(window['-GRAPH-'], 400, 300)
+            arm.draw_arm(window['-GRAPH-'])
+            #arm.push_movements(move_buffer) // error is in push movement function
+        #write_buffer_serial(serial, move_buffer)
 
-        #arm.calculate_angles(target_x, target_y)
-        arm.calculate_angles(x, y)
-        draw_base_rectangle(window['-GRAPH-'], 400, 300)
-        arm.draw_arm()
-        if draw_interactive.reading_movements == True: 
-            draw_interactive.add_point(x, y)
-
-    elif event == 'start-read': 
-        x, y = values['-GRAPH-']
-        draw_interactive.reading_movements = True
+    #elif event == 'start-read': 
+    #    x, y = values['-GRAPH-']
+    #    draw_interactive.reading_movements = True
     
     #elif event == 'process-drawing':
-        #process drawing
+        #process drawing'''
 
-
-
-
+    
 
 # Close window when loop is broken.
 window.close()

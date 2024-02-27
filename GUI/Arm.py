@@ -5,12 +5,11 @@ import math
 import json
 import serial
 import time
-from pprint import pprint
+#from pprint import pprint
 
 
 class Arm2Link:
-    def __init__(self, graph, len1, len2, base_x, base_y, q1_step_angle, q2_step_angle ):
-        self.graph = graph
+    def __init__(self, len1, len2, base_x, base_y, q1_step_angle, q2_step_angle ):
         self.len1 = len1
         self.len2 = len2
         self.base_x = base_x
@@ -25,7 +24,8 @@ class Arm2Link:
         self.q1_step_angle = q1_step_angle
         self.q2_step_angle = q2_step_angle
 
-        self.movement_buffer = []
+        self.q1_delta = 0 
+        self.q2_delta = 0
 
 
     def set_end_effector_position(self, x, y):
@@ -39,6 +39,9 @@ class Arm2Link:
 
         self.end_x = end_x
         self.end_y = end_y
+
+        old_q1 = self.q1
+        old_q2 = self.q2
 
         distance_to_endeff = math.sqrt((end_x - self.base_x)**2 + (end_y - self.base_y)**2)
         if(distance_to_endeff >= (self.len1 + self.len2)):
@@ -55,10 +58,58 @@ class Arm2Link:
         sin_q2 = math.sqrt(1 - cos_q2**2)
         self.q1 = phi - math.atan2((self.len2 * sin_q2), (self.len1 + self.len2 * cos_q2))  # Angle for the first link
 
+        self.q1_delta = self.q1_delta + ( old_q1 - self.q1 )
+        self.q2_delta = self.q2_delta + ( old_q2 - self.q2 )
 
-    def draw_arm(self):
+        #print(self.q1_delta, self.q2_delta)
+
+    def push_movements(self, move_buffer):
+        m1, m2 = 0
+        m1_dir, m2_dir = 0
+
+        while((abs(self.q1_delta) >= self.q1_step_angle) or (abs(self.q2_delta) >= self.q2_step_angle)):
+
+            if(abs(self.q1_delta) >= self.q1_step_angle):
+                m1 = 1
+                if(self.q1_delta < 0 ):
+                    m1_dir = 0
+                    self.q1_delta = self.q1_delta + self.q1_step_angle #add if q1 delta is negative to bring it to zero
+                else: 
+                    m2_dir = 1
+                    self.q1_delta = self.q1_delta - self.q1_step_angle #subtract if q1 delta is negative to bring it to zer
+            else:
+                m1 = 0
+
+            
+
+            if(abs(self.q2_delta) >= self.q2_step_angle):
+                m2 = 1
+                if(self.q2_delta < 0 ):
+                    m2_dir = 0
+                    self.q2_delta = self.q2_delta + self.q2_step_angle #add if q1 delta is negative to bring it to zero
+                else: 
+                    m2_dir = 1
+                    self.q2_delta = self.q2_delta - self.q2_step_angle #subtract if q1 delta is negative to bring it to zer
+            else:
+                m1 = 0
+
+            packet = {
+                "m1_tck": m1,
+                "m2_tck": m2,
+                "m1_dir": m1_dir,
+                "m2_dir": m2_dir
+            }
+
+            # Convert the packet to a JSON string
+            json_packet = json.dumps(packet)
+
+            move_buffer.append(json_packet)
+            #print(json_packet)
+
+
+    def draw_arm(self, graph):
         # Clear previous drawings
-        self.graph.erase()
+        graph.erase()
 
         # Calculate the joint position based on the angles
         joint_x = self.base_x + self.len1 * math.cos(self.q1)
@@ -68,10 +119,10 @@ class Arm2Link:
 
 
         # Draw the arm: base -> joint -> end effector
-        self.graph.draw_line((self.base_x, self.base_y), (joint_x, joint_y), width=5)
-        self.graph.draw_line((joint_x, joint_y), (self.end_x, self.end_y), width=5)
+        graph.draw_line((self.base_x, self.base_y), (joint_x, joint_y), width=5)
+        graph.draw_line((joint_x, joint_y), (self.end_x, self.end_y), width=5)
 
-        print(math.degrees(self.q1), math.degrees(self.q2))
+        #print(math.degrees(self.q1), math.degrees(self.q2))
 
     def update_end_effector_position(self):
         # Calculate the end effector's position based on the current angles
