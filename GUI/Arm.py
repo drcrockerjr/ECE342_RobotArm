@@ -5,6 +5,7 @@ import math
 import json
 import serial
 import time
+import threading
 #from pprint import pprint
 
 
@@ -26,6 +27,8 @@ class Arm2Link:
 
         self.q1_delta = 0 
         self.q2_delta = 0
+
+        self.delta_lock = threading.Lock()
 
 
     def set_end_effector_position(self, x, y):
@@ -63,49 +66,6 @@ class Arm2Link:
 
         #print(self.q1_delta, self.q2_delta)
 
-    def push_movements(self, move_buffer):
-        m1, m2 = 0
-        m1_dir, m2_dir = 0
-
-        while((abs(self.q1_delta) >= self.q1_step_angle) or (abs(self.q2_delta) >= self.q2_step_angle)):
-
-            if(abs(self.q1_delta) >= self.q1_step_angle):
-                m1 = 1
-                if(self.q1_delta < 0 ):
-                    m1_dir = 0
-                    self.q1_delta = self.q1_delta + self.q1_step_angle #add if q1 delta is negative to bring it to zero
-                else: 
-                    m2_dir = 1
-                    self.q1_delta = self.q1_delta - self.q1_step_angle #subtract if q1 delta is negative to bring it to zer
-            else:
-                m1 = 0
-
-            
-
-            if(abs(self.q2_delta) >= self.q2_step_angle):
-                m2 = 1
-                if(self.q2_delta < 0 ):
-                    m2_dir = 0
-                    self.q2_delta = self.q2_delta + self.q2_step_angle #add if q1 delta is negative to bring it to zero
-                else: 
-                    m2_dir = 1
-                    self.q2_delta = self.q2_delta - self.q2_step_angle #subtract if q1 delta is negative to bring it to zer
-            else:
-                m1 = 0
-
-            packet = {
-                "m1_tck": m1,
-                "m2_tck": m2,
-                "m1_dir": m1_dir,
-                "m2_dir": m2_dir
-            }
-
-            # Convert the packet to a JSON string
-            json_packet = json.dumps(packet)
-
-            move_buffer.append(json_packet)
-            #print(json_packet)
-
 
     def draw_arm(self, graph):
         # Clear previous drawings
@@ -114,8 +74,6 @@ class Arm2Link:
         # Calculate the joint position based on the angles
         joint_x = self.base_x + self.len1 * math.cos(self.q1)
         joint_y = self.base_y + self.len1 * math.sin(self.q1)
-        #end_x = joint_x + self.len2 * math.cos(self.q1 + self.q2)
-        #end_y = joint_y + self.len2 * math.sin(self.q1 + self.q2)
 
 
         # Draw the arm: base -> joint -> end effector

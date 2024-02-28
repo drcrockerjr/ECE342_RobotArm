@@ -32,6 +32,7 @@ import math
 import queue
 import serial
 import json
+import threading
 
 from Arm import Arm2Link
 
@@ -51,6 +52,12 @@ class DrawInteractive():
     def execute_picture(self):
 
         return self.saved_movements
+    
+
+class MoveBuffer(queue.Queue):
+    def __init__(self):
+        super.__init__(maxsize=400)
+
 
 
 #def write_buffer_serial(serial, buffer):  
@@ -90,6 +97,48 @@ def reportSent(success, code):
         print("Command {} is sent".format(code))
     else:
         print("Command {} send failed".format(code))
+
+
+def push_movements(move_buf, q1_delta, q2_delta, q1_stp_angle, q2_stp_angle):
+        m1 = m2 = 0
+        m1_dir = m2_dir = 0
+
+        while((abs(q1_delta) >= q1_stp_angle) or (abs(q2_delta) >= q2_stp_angle)):
+
+            if(abs(q1_delta) >= q1_stp_angle):
+                m1 = 1
+                if(q1_delta < 0 ):
+                    m1_dir = 0
+                    q1_delta = q1_delta + q1_stp_angle #add if q1 delta is negative to bring it to zero
+                else: 
+                    m2_dir = 1
+                    q1_delta = q1_delta - q1_stp_angle #subtract if q1 delta is negative to bring it to zer
+            else:
+                m1 = 0
+
+            if(abs(q2_delta) >= q2_stp_angle):
+                m2 = 1
+                if(q2_delta < 0 ):
+                    m2_dir = 0
+                    q2_delta = q2_delta + q2_stp_angle #add if q1 delta is negative to bring it to zero
+                else: 
+                    m2_dir = 1
+                    q2_delta = q2_delta - q2_stp_angle #subtract if q1 delta is negative to bring it to zer
+            else:
+                m2 = 0
+
+            packet = {
+                "m1_tck": m1,
+                "m2_tck": m2,
+                "m1_dir": m1_dir,
+                "m2_dir": m2_dir
+            }
+
+            # Convert the packet to a JSON string
+            json_packet = json.dumps(packet)
+
+            move_buf.put(json_packet)
+            print(json_packet)
 
 # GUI theme
 # All default themes available at:
@@ -156,7 +205,9 @@ tab2 = [
 
         [sg.Button('Apply', key='apply')],
         [sg.Text('Robot Arm Visualization:')],
+
         [sg.Graph(canvas_size=(600, 400), graph_bottom_left=(0, 0), graph_top_right=(600, 400), background_color='white', key='-GRAPH-', enable_events=True, drag_submits=True)],
+        
         [sg.Button('Start Reading', key='start-read')],
         [sg.Button('Process Contents', key='process-drawing')]
 
@@ -181,7 +232,7 @@ baud = 115200                   # baud rate to use
                        stopbits=serial.STOPBITS_ONE
                        )'''
 
-move_buffer = []
+
 
 # Can only call this once. Opens a window.
 window = sg.Window('Robot Arm Interface', layout, location=(200, 0), finalize=True)
@@ -189,6 +240,8 @@ window = sg.Window('Robot Arm Interface', layout, location=(200, 0), finalize=Tr
 graph = window['-GRAPH-']  # type: sg.Graph
 
 arm = Arm2Link( 200, 200, 500, 300, 1.8, 1.8)  # Initialize the arm with the graph element
+
+#move_buffer = MoveBuffer()
 
 #draw_interactive = DrawInteractive(graph, arm)
 
@@ -205,9 +258,13 @@ while True:
             continue
         if 0 <= x <= 400 and 0 <= y <= 600:  # Replace graph_width and graph_height with the actual dimensions of your graph
             arm.calculate_angles(x, y)
-            draw_base_rectangle(window['-GRAPH-'], 400, 300)
-            arm.draw_arm(window['-GRAPH-'])
-            #arm.push_movements(move_buffer) // error is in push movement function
+            #x = threading.Thread(target=push_movements, args=(move_buffer, arm.q1_delta, arm.q2_delta, arm.q1_step_angle, arm.q2_step_angle))
+            #x.start()
+
+            draw_base_rectangle(graph, 400, 300)
+            arm.draw_arm(graph)
+
+            #arm.push_movements(move_buffer) # error is in push movement function
         #write_buffer_serial(serial, move_buffer)
 
     #elif event == 'start-read': 
