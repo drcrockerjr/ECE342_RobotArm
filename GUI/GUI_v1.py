@@ -36,7 +36,6 @@ import threading
 
 from Arm import Arm2Link
 
-
 class DrawInteractive():
     def __init__(self, graph, arm):
         self.reading_movements = False
@@ -56,8 +55,31 @@ class DrawInteractive():
 
 class MoveBuffer(queue.Queue):
     def __init__(self):
-        super.__init__(maxsize=400)
+        super().__init__()
+    def flush_to_serial(self, serial):
+        while not self.empty():
+            p = queue.get()
+            serial.write(p.encode())
 
+    # <----  Iter Protocol  ------>
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        try:
+            if not self.empty():
+
+                ret = self.get() # delete when not formating with newline
+
+                return ret  # block=True | default
+            else:
+                raise StopIteration
+        except ValueError:  # the Queue is closed
+            raise StopIteration
+
+arm = Arm2Link( 200, 200, 300, 0, 1.8, 1.8)  # Initialize the arm with the graph element
+
+move_buffer = MoveBuffer()
 
 
 #def write_buffer_serial(serial, buffer):  
@@ -135,10 +157,11 @@ def push_movements(move_buf, q1_delta, q2_delta, q1_stp_angle, q2_stp_angle):
             }
 
             # Convert the packet to a JSON string
-            json_packet = json.dumps(packet)
-
-            move_buf.put(json_packet)
-            print(json_packet)
+            #json_packet = json.dumps(packet)
+            #move_buf.put(json_packet)
+            #print(json_packet)
+            move_buf.put(packet)
+            print(packet)
 
 # GUI theme
 # All default themes available at:
@@ -207,7 +230,9 @@ tab2 = [
         [sg.Text('Robot Arm Visualization:')],
 
         [sg.Graph(canvas_size=(600, 400), graph_bottom_left=(0, 0), graph_top_right=(600, 400), background_color='white', key='-GRAPH-', enable_events=True, drag_submits=True)],
-        
+
+        [sg.Multiline(list(move_buffer), key='-QUE_TEXT-', size=(20, 5), disabled=True)],
+
         [sg.Button('Start Reading', key='start-read')],
         [sg.Button('Process Contents', key='process-drawing')]
 
@@ -222,10 +247,17 @@ layout = [
 ]
 
 #Serial Configuarations
-com = 'COM4'                    # Serial Communication Port to send data over.
-baud = 115200                   # baud rate to use
 
-'''serial = serial.Serial(com, baud,
+#MacOS example
+com = '/dev/tty.usbmodem14101'  # Serial Communication Port to send data over (example for macOS).
+baud = 115200                   # Baud rate to use
+
+
+#Windows Example
+#com = 'COM4'                    # Serial Communication Port to send data over.
+#baud = 115200                   # baud rate to use
+
+'''arduino_serial = serial.Serial(com, baud,
                        timeout=2.5,
                        parity=serial.PARITY_NONE,
                        bytesize=serial.EIGHTBITS,
@@ -238,10 +270,6 @@ baud = 115200                   # baud rate to use
 window = sg.Window('Robot Arm Interface', layout, location=(200, 0), finalize=True)
 
 graph = window['-GRAPH-']  # type: sg.Graph
-
-arm = Arm2Link( 200, 200, 500, 300, 1.8, 1.8)  # Initialize the arm with the graph element
-
-#move_buffer = MoveBuffer()
 
 #draw_interactive = DrawInteractive(graph, arm)
 
@@ -258,11 +286,15 @@ while True:
             continue
         if 0 <= x <= 400 and 0 <= y <= 600:  # Replace graph_width and graph_height with the actual dimensions of your graph
             arm.calculate_angles(x, y)
-            #x = threading.Thread(target=push_movements, args=(move_buffer, arm.q1_delta, arm.q2_delta, arm.q1_step_angle, arm.q2_step_angle))
-            #x.start()
-
+            x = threading.Thread(target=push_movements, args=(move_buffer, arm.q1_delta, arm.q2_delta, arm.q1_step_angle, arm.q2_step_angle))
+            x.start()
             draw_base_rectangle(graph, 400, 300)
             arm.draw_arm(graph)
+            
+            #x.join()
+            window.Element('-QUE_TEXT-').Update(f'Queue: {list(move_buffer)}')
+
+            #move_buffer.flush_to_serial(serial=arduino_serial)
 
             #arm.push_movements(move_buffer) # error is in push movement function
         #write_buffer_serial(serial, move_buffer)
@@ -273,8 +305,6 @@ while True:
     
     #elif event == 'process-drawing':
         #process drawing'''
-
-    
-
+        
 # Close window when loop is broken.
 window.close()
