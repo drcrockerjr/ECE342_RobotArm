@@ -28,13 +28,20 @@ import numpy as np
 
 #import pygame
 import numpy as np
-import math
 import queue
 import serial
 import json
 import threading
+import time
+import os
+import cProfile
 
 from Arm import Arm2Link
+
+'''try:
+    os.sys.exit()
+except Exception as e:
+    print(f"An unexpected error occurred: {e}")'''
 
 class DrawInteractive():
     def __init__(self, graph, arm):
@@ -58,8 +65,13 @@ class MoveBuffer(queue.Queue):
         super().__init__()
     def flush_to_serial(self, serial):
         while not self.empty():
-            p = queue.get()
-            serial.write(p.encode())
+
+            if serial.isOpen():
+                p = self.get()
+                # Concatenate a newline character to the message
+                full_message = p + '\n'
+                serial.write(full_message.encode('ascii'))
+                serial.flush()
 
     # <----  Iter Protocol  ------>
     def __iter__(self):
@@ -77,33 +89,16 @@ class MoveBuffer(queue.Queue):
         except ValueError:  # the Queue is closed
             raise StopIteration
 
-arm = Arm2Link( 200, 200, 300, 0, 1.8, 1.8)  # Initialize the arm with the graph element
-
-move_buffer = MoveBuffer()
-
-
-#def write_buffer_serial(serial, buffer):  
-#    for json_packet in buffer: 
-#        serial.write(json_packet.encode())
-#
-#    buffer.clear() #clear buffer when movements have been pushed ot arduino
-
 
 def draw_base_rectangle(graph, width, height, border_thickness=2, color='gray'):
 
     # Calculate the top left corner of the rectangle
-    rect_x = 500 - width // 2
-    rect_y = 500 - height
+    rect_x = width // 2
+    rect_y = height
 
     # Draw the rectangle
     graph.DrawRectangle((rect_x, rect_y), (rect_x + width, rect_y + height), line_color=color, line_width=border_thickness)
 
-
-#def execute_command():
-
-# An unused test function to demonstrate functionality of the GUI.
-def test_func(colorPalette, granularity, maxlines, papersize):
-    print("Color: ",colorPalette, "Granularity: ", granularity, "maxlines: ", maxlines, "papersize: ", papersize)
 
 # Prints to console when command is complete.
 def reportDone():
@@ -121,48 +116,6 @@ def reportSent(success, code):
         print("Command {} send failed".format(code))
 
 
-def push_movements(move_buf, q1_delta, q2_delta, q1_stp_angle, q2_stp_angle):
-        m1 = m2 = 0
-        m1_dir = m2_dir = 0
-
-        while((abs(q1_delta) >= q1_stp_angle) or (abs(q2_delta) >= q2_stp_angle)):
-
-            if(abs(q1_delta) >= q1_stp_angle):
-                m1 = 1
-                if(q1_delta < 0 ):
-                    m1_dir = 0
-                    q1_delta = q1_delta + q1_stp_angle #add if q1 delta is negative to bring it to zero
-                else: 
-                    m2_dir = 1
-                    q1_delta = q1_delta - q1_stp_angle #subtract if q1 delta is negative to bring it to zer
-            else:
-                m1 = 0
-
-            if(abs(q2_delta) >= q2_stp_angle):
-                m2 = 1
-                if(q2_delta < 0 ):
-                    m2_dir = 0
-                    q2_delta = q2_delta + q2_stp_angle #add if q1 delta is negative to bring it to zero
-                else: 
-                    m2_dir = 1
-                    q2_delta = q2_delta - q2_stp_angle #subtract if q1 delta is negative to bring it to zer
-            else:
-                m2 = 0
-
-            packet = {
-                "m1_tck": m1,
-                "m2_tck": m2,
-                "m1_dir": m1_dir,
-                "m2_dir": m2_dir
-            }
-
-            # Convert the packet to a JSON string
-            #json_packet = json.dumps(packet)
-            #move_buf.put(json_packet)
-            #print(json_packet)
-            move_buf.put(packet)
-            print(packet)
-
 # GUI theme
 # All default themes available at:
 # https://user-images.githubusercontent.com/46163555/71361827-2a01b880-2562-11ea-9af8-2c264c02c3e8.jpg
@@ -170,15 +123,6 @@ sg.theme('BlueMono')
 
 #cap = cv2.VideoCapture(0)       # select webcam input
 file_path = ""                  # File path in the file browser input box
-
-'''# Default OpenCV values:
-color1 = int(0x0000ff)
-color2 = int(0x00ff00)
-color3 = int(0xff0000)
-colorPalette = [(color1 >> 16,  color1 % (2**16) >> 8, color1 % (2**8)), (color2 >> 16, (color2 % (2**16)) >> 8,
-                color2 % (2**8)), (color3 >> 16,  (color3 % (2**16)) >> 8, color3 % (2**8))]
-'''
-
 
 
 granularity = 1
@@ -189,7 +133,7 @@ paperSize = (279, 215)
 # Main tab for selecting data to send
 tab1 = [
 
-        [sg.Text('Capture a webcam image, upload an image, or upload a GCode file.')],
+        [sg.Text('Capture a webcam image, upload an image, or upload a GCode file.', key='img_text')],
 
         #[sg.Text('Upload an image or GCode file:'), sg.Input(key='inputbox'),
         # sg.FileBrowse(key='browse', file_types=(("Image Files", "*.png"),
@@ -212,29 +156,29 @@ tab1 = [
 tab2 = [
         [sg.Text('Enter drawing interactive parameters', key='db_text')],
 
-        [sg.Text('Color Palette (6 digit hex)', size=(40, 1)),
+        [sg.Text('Color Palette (6 digit hex)', size=(40, 1), key='color_txt'),
             sg.Input(size=(13, 1), key='color1', default_text="0000FF"),
             sg.Input(size=(13, 1), key='color2', default_text="00FF00"),
             sg.Input(size=(13, 1), key='color3', default_text="FF0000")],
 
-        [sg.Text('Granularity (float between 1 and 50)', size=(40, 1)),
+        [sg.Text('Granularity (float between 1 and 50)', size=(40, 1), key='gran_txt'),
             sg.Input(key='granularity', default_text="1")],
 
         [sg.Text('Max Lines (int between 1 and 1000)', size=(40, 1)), sg.Input(key='maxlines', default_text="100")],
 
-        [sg.Text('Paper Size in mm (int in [10, 279], int in [10, 215])', size=(40, 1)),
+        [sg.Text('Paper Size in mm (int in [10, 279], int in [10, 215])', size=(40, 1), key='paper_txt'),
             sg.Input(size=(21, 1), key='dim1', default_text="279"),
             sg.Input(size=(21, 1), key='dim2', default_text="215")],
 
         [sg.Button('Apply', key='apply')],
-        [sg.Text('Robot Arm Visualization:')],
+        [sg.Text('Robot Arm Visualization:', key='visual_txt')],
 
         [sg.Graph(canvas_size=(600, 400), graph_bottom_left=(0, 0), graph_top_right=(600, 400), background_color='white', key='-GRAPH-', enable_events=True, drag_submits=True)],
 
-        [sg.Multiline(list(move_buffer), key='-QUE_TEXT-', size=(20, 5), disabled=True)],
+        #[sg.Multiline(list(move_buffer), key='-QUE_TEXT-', size=(20, 5), disabled=True)],
 
         [sg.Button('Start Reading', key='start-read')],
-        [sg.Button('Process Contents', key='process-drawing')]
+        [sg.Button('Connect to Serial', key='connect_serial')]
 
 ]
 
@@ -250,61 +194,107 @@ layout = [
 
 #MacOS example
 com = '/dev/tty.usbmodem14101'  # Serial Communication Port to send data over (example for macOS).
-baud = 115200                   # Baud rate to use
+baud = 9600                   # Baud rate to use
+
+
+arm = Arm2Link( 200, 200, 300, 0, 1.8, 1.8)  # Initialize the arm with the graph element
+
+move_buffer = MoveBuffer()
 
 
 #Windows Example
 #com = 'COM4'                    # Serial Communication Port to send data over.
-#baud = 115200                   # baud rate to use
-
-'''arduino_serial = serial.Serial(com, baud,
-                       timeout=2.5,
-                       parity=serial.PARITY_NONE,
-                       bytesize=serial.EIGHTBITS,
-                       stopbits=serial.STOPBITS_ONE
-                       )'''
+#baud = 9600                   # baud rate to use
 
 
+#arduino_serial = serial.Serial('/dev/tty.usbmodem14101', 9600)
+
+'''try:
+    arduino_serial = serial.Serial(com, baud,
+                                timeout=2.5,
+                                #parity=serial.PARITY_NONE,
+                                bytesize=serial.EIGHTBITS,
+                                #stopbits=serial.STOPBITS_ONE
+                                )
+    print("sSerial port opened successfully")
+except serial.SerialException as e:
+    print(f"Error opening serial port: {e}")
+except Exception as e:
+    print(f"An unexpected error occurred: {e}")'''
+
+arduino_serial = None
 
 # Can only call this once. Opens a window.
 window = sg.Window('Robot Arm Interface', layout, location=(200, 0), finalize=True)
 
-graph = window['-GRAPH-']  # type: sg.Graph
+#graph = window['-GRAPH-']  # type: sg.Graph
 
 #draw_interactive = DrawInteractive(graph, arm)
 
 
+last_mouse_event = 0
+current_mouse_event = 0
+
 # Continue looping forever.
 while True:
     # Check for events, update values
-    event, values = window.read(timeout=40)
+    event, values = window.read(timeout=0)
+    graph = window['-GRAPH-']  # type: sg.Graph
     if event in (None, 'exit'):     # If window is closed or exit button pressed, close program.
         break
     elif event == '-GRAPH-':  # Check if the event is from the Graph element
+        
+
         x, y = values['-GRAPH-']
+
         if (x, y) == (None, None):  # Check if mouse is within the graph area
             continue
-        if 0 <= x <= 400 and 0 <= y <= 600:  # Replace graph_width and graph_height with the actual dimensions of your graph
-            arm.calculate_angles(x, y)
-            x = threading.Thread(target=push_movements, args=(move_buffer, arm.q1_delta, arm.q2_delta, arm.q1_step_angle, arm.q2_step_angle))
-            x.start()
-            draw_base_rectangle(graph, 400, 300)
-            arm.draw_arm(graph)
             
-            #x.join()
-            window.Element('-QUE_TEXT-').Update(f'Queue: {list(move_buffer)}')
+        if 0 <= x <= 600 and 0 <= y <= 400:  # Replace graph_width and graph_height with the actual dimensions of your graph
+            current_mouse_event = time.time() * 1000 # ms measurement of time when mouse event occurs
 
-            #move_buffer.flush_to_serial(serial=arduino_serial)
+            #debouncing multiple mouse events
+            if(current_mouse_event - last_mouse_event >= 100):
+                graph.erase()
 
-            #arm.push_movements(move_buffer) # error is in push movement function
-        #write_buffer_serial(serial, move_buffer)
+                arm.calculate_angles_V2(graph, x, y, move_buffer)
+
+
+                draw_base_rectangle(graph, 400, 300)
+                arm.draw_arm(graph)
+                #print("\n\n Serial Flushed \n\n ")
+                
+                #x.join()
+                #window.Element('-QUE_TEXT-').Update(f'Queue: {list(move_buffer)}')
+
+                try:
+                    move_buffer.flush_to_serial(serial=arduino_serial)
+                    print("\n Flushed to Arduino \n")
+                except Exception as e:
+                    print(f"An unexpected error occurred: {e}")
+
+                last_mouse_event = time.time() * 1000
 
     #elif event == 'start-read': 
     #    x, y = values['-GRAPH-']
     #    draw_interactive.reading_movements = True
     
-    #elif event == 'process-drawing':
-        #process drawing'''
+    elif event == 'connect_serial':
+        try:
+            arduino_serial = serial.Serial(com, baud,
+                                        timeout=2.5,
+                                        #parity=serial.PARITY_NONE,
+                                        bytesize=serial.EIGHTBITS,
+                                        #stopbits=serial.STOPBITS_ONE
+                                        )
+            print("sSerial port opened successfully")
+        except serial.SerialException as e:
+            print(f"Error opening serial port: {e}")
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
         
 # Close window when loop is broken.
 window.close()
+
+if __name__ == "__main__": 
+    main()
