@@ -35,13 +35,11 @@ import threading
 import time
 import os
 import cProfile
+import os
+from gCodeInt import process_file, process_movements
 
 from Arm import Arm2Link
 
-'''try:
-    os.sys.exit()
-except Exception as e:
-    print(f"An unexpected error occurred: {e}")'''
 
 class DrawInteractive():
     def __init__(self, graph, arm):
@@ -90,14 +88,16 @@ class MoveBuffer(queue.Queue):
             raise StopIteration
 
 
-def draw_base_rectangle(graph, width, height, border_thickness=2, color='gray'):
+def draw_centered_rectangle(graph, width, height, border_thickness=2, color='gray'):
+    graph_width, graph_height = graph.get_size()
 
     # Calculate the top left corner of the rectangle
-    rect_x = width // 2
-    rect_y = height
+    rect_x = (graph_width - width) // 2
+    rect_y = (graph_height - height) // 2
 
     # Draw the rectangle
     graph.DrawRectangle((rect_x, rect_y), (rect_x + width, rect_y + height), line_color=color, line_width=border_thickness)
+
 
 
 # Prints to console when command is complete.
@@ -114,6 +114,7 @@ def reportSent(success, code):
         print("Command {} is sent".format(code))
     else:
         print("Command {} send failed".format(code))
+    
 
 
 # GUI theme
@@ -135,9 +136,9 @@ tab1 = [
 
         [sg.Text('Capture a webcam image, upload an image, or upload a GCode file.', key='img_text')],
 
-        #[sg.Text('Upload an image or GCode file:'), sg.Input(key='inputbox'),
-        # sg.FileBrowse(key='browse', file_types=(("Image Files", "*.png"),
-        #                                         ("GCode Files", "*.txt *.gcode *.mpt *.mpf *.nc")))],
+        [sg.Text('Upload an image or GCode file:'), sg.Input(key='inputbox'),
+            sg.FileBrowse(key='browse', file_types=(("Image Files", "*.png"),
+                                                 ("GCode Files", "*.txt *.gcode *.mpt *.mpf *.nc")))],
 
         [sg.Text('Webcam output:', key='imgtext')],
 
@@ -148,7 +149,7 @@ tab1 = [
 
         [sg.Text("Send Output:\t"),
          sg.Button("Send Image", key="sendimg", disabled=True),
-         sg.Button("Send GCode File", key="sendGcode", disabled=True)]
+         sg.Button("Send GCode File", key="sendGcode", disabled=False)]
          
 ]
 
@@ -196,41 +197,21 @@ layout = [
 com = '/dev/tty.usbmodem14101'  # Serial Communication Port to send data over (example for macOS).
 baud = 9600                   # Baud rate to use
 
-
-arm = Arm2Link( 200, 200, 300, 0, 1.8, 1.8)  # Initialize the arm with the graph element
-
-move_buffer = MoveBuffer()
-
-
 #Windows Example
 #com = 'COM4'                    # Serial Communication Port to send data over.
 #baud = 9600                   # baud rate to use
 
 
-#arduino_serial = serial.Serial('/dev/tty.usbmodem14101', 9600)
+arm = Arm2Link( 200, 200, 300, 0, 1.8, 1.8)  # Initialize the arm with the graph element
 
-'''try:
-    arduino_serial = serial.Serial(com, baud,
-                                timeout=2.5,
-                                #parity=serial.PARITY_NONE,
-                                bytesize=serial.EIGHTBITS,
-                                #stopbits=serial.STOPBITS_ONE
-                                )
-    print("sSerial port opened successfully")
-except serial.SerialException as e:
-    print(f"Error opening serial port: {e}")
-except Exception as e:
-    print(f"An unexpected error occurred: {e}")'''
+move_buffer = MoveBuffer()
 
 arduino_serial = None
 
 # Can only call this once. Opens a window.
 window = sg.Window('Robot Arm Interface', layout, location=(200, 0), finalize=True)
 
-#graph = window['-GRAPH-']  # type: sg.Graph
-
-#draw_interactive = DrawInteractive(graph, arm)
-
+graph = window['-GRAPH-']  # type: sg.Graph
 
 last_mouse_event = 0
 current_mouse_event = 0
@@ -239,7 +220,6 @@ current_mouse_event = 0
 while True:
     # Check for events, update values
     event, values = window.read(timeout=0)
-    graph = window['-GRAPH-']  # type: sg.Graph
     if event in (None, 'exit'):     # If window is closed or exit button pressed, close program.
         break
     elif event == '-GRAPH-':  # Check if the event is from the Graph element
@@ -259,13 +239,9 @@ while True:
 
                 arm.calculate_angles_V2(graph, x, y, move_buffer)
 
-
-                draw_base_rectangle(graph, 400, 300)
+                draw_centered_rectangle(graph, 400, 300)
                 arm.draw_arm(graph)
                 #print("\n\n Serial Flushed \n\n ")
-                
-                #x.join()
-                #window.Element('-QUE_TEXT-').Update(f'Queue: {list(move_buffer)}')
 
                 try:
                     move_buffer.flush_to_serial(serial=arduino_serial)
@@ -274,10 +250,6 @@ while True:
                     print(f"An unexpected error occurred: {e}")
 
                 last_mouse_event = time.time() * 1000
-
-    #elif event == 'start-read': 
-    #    x, y = values['-GRAPH-']
-    #    draw_interactive.reading_movements = True
     
     elif event == 'connect_serial':
         try:
@@ -292,6 +264,20 @@ while True:
             print(f"Error opening serial port: {e}")
         except Exception as e:
             print(f"An unexpected error occurred: {e}")
+
+    elif event == 'sendGcode':
+        try:
+            file_path = values['browse']
+
+            print(f'Sending G-code file {file_path} ...')
+
+            if os.path.exists(file_path):
+                process_file(file_path)
+            else: 
+                print(f"File not found: {file_path}")
+
+        except Exception as e:
+            print(f"Error occured: {e}")
         
 # Close window when loop is broken.
 window.close()
