@@ -1,64 +1,47 @@
 import os
 
-class Coordinate:
-    def __init__(self):
-        self.x = 0.0
-        self.y = 0.0
-
 def filter_commands(curr_line):
     gcmd = 0
-    command = None
 
-    command = "G0" in curr_line
-    if command:
+    if "G0" in curr_line:
         return gcmd
     gcmd += 1
 
-    command = "G1" in curr_line
-    if command:
+    if "G1" in curr_line:
         return gcmd
     gcmd += 1
 
-    command = "G20" in curr_line
-    if command:
+    if "G20" in curr_line:
         return gcmd
     gcmd += 1
 
-    command = "G21" in curr_line
-    if command:
+    if "G21" in curr_line:
         return gcmd
     gcmd += 1
 
-    command = "G90" in curr_line
-    if command:
+    if "G90" in curr_line:
         return gcmd
     gcmd += 1
 
-    command = "G91" in curr_line
-    if command:
+    if "G91" in curr_line:
         return gcmd
     gcmd += 1
 
-    command = "M2" in curr_line
-    if command:
+    if "M2" in curr_line:
         return gcmd
     gcmd += 1
 
-    command = "M6" in curr_line
-    if command:
+    if "M6" in curr_line:
         return gcmd
     gcmd += 1
 
-    command = "M72" in curr_line
-    if command:
+    if "M72" in curr_line:
         return gcmd
     gcmd += 1
 
     return gcmd
 
 def process_movements(curr_line, usemm, useabsolute, prev_coord):
-    saveptr = None
-
     tokens = curr_line.split("X")
     tokens = tokens[1].split()
     new_x_coord = float(tokens[0])
@@ -68,7 +51,7 @@ def process_movements(curr_line, usemm, useabsolute, prev_coord):
         x_coord = new_x_coord
     elif useabsolute == 0:
         print("R: ", end='')
-        x_coord = prev_coord.x + new_x_coord
+        x_coord = prev_coord[0] + new_x_coord
 
     if usemm == 0 and useabsolute == 1:
         x_coord = x_coord * 25.4
@@ -82,20 +65,20 @@ def process_movements(curr_line, usemm, useabsolute, prev_coord):
         y_coord = new_y_coord
     elif useabsolute == 0:
         print("R: ", end='')
-        y_coord = prev_coord.y + new_y_coord
+        y_coord = prev_coord[1] + new_y_coord
 
     if usemm == 0 and useabsolute == 1:
         y_coord = y_coord * 25.4
 
-    prev_coord.x = x_coord
-    prev_coord.y = y_coord
+    prev_coord[0] = x_coord
+    prev_coord[1] = y_coord
 
     print("(", x_coord, ",", y_coord, ")")
 
     return prev_coord
 
 def process_file(file_path):
-    prev_coord = Coordinate()
+    prev_coord = [0.0, 0.0]
 
     with open(file_path, 'r') as gcode_file:
         usemm = -1
@@ -140,10 +123,6 @@ def find_user_file():
     return None
 
 def main():
-    tool_change = Coordinate()
-    tool_change.x = 1000000
-    tool_change.y = 1000000
-
     file_name = find_user_file()
     if file_name:
         process_file(file_name)
