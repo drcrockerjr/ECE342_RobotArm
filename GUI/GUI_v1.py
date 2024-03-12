@@ -36,7 +36,8 @@ import time
 import os
 import cProfile
 import os
-from gCodeInt import process_file, process_movements
+from gCodeInt import process_file
+from gCodeInt import process_movements
 
 from Arm import Arm2Link
 

@@ -1,4 +1,5 @@
 import os
+import time
 
 def filter_commands(curr_line):
     gcmd = 0
@@ -41,7 +42,11 @@ def filter_commands(curr_line):
 
     return gcmd
 
-def process_movements(curr_line, usemm, useabsolute, prev_coord):
+def process_movements(curr_line, usemm, useabsolute, prev_coord, command_coordinates):
+
+    #command_coordinates = []
+    #command_coordinates.append(start_x, start_y)
+
     tokens = curr_line.split("X")
     tokens = tokens[1].split()
     new_x_coord = float(tokens[0])
@@ -75,10 +80,15 @@ def process_movements(curr_line, usemm, useabsolute, prev_coord):
 
     print("(", x_coord, ",", y_coord, ")")
 
+    command_coordinates.append([x_coord, y_coord])
+
     return prev_coord
 
-def process_file(file_path):
-    prev_coord = [0.0, 0.0]
+def process_file(file_path, start_x, start_y):
+
+    prev_coord = [start_x, start_y]
+    command_coordinates = []
+    #command_coordinates.append(start_x, start_y)
 
     with open(file_path, 'r') as gcode_file:
         usemm = -1
@@ -88,7 +98,7 @@ def process_file(file_path):
             command_num = filter_commands(curr_line)
 
             if command_num < 2:
-                prev_coord = process_movements(curr_line, usemm, useabsolute, prev_coord)
+                prev_coord = process_movements(curr_line, usemm, useabsolute, prev_coord, command_coordinates)
             elif command_num == 2:
                 usemm = 0
                 print("Using Inches")
@@ -105,7 +115,13 @@ def process_file(file_path):
                 print("End Program")
                 return
             elif command_num == 7:
-                print("Tool Change")
+                print("\nTool Change Starting")
+                start_time = time.time() * 1000
+                while start_time - time.time <= 10000:
+                    #nothing
+                    print(".")
+                print("\nTool Change Ending")
+
             elif command_num == 8:
                 useabsolute = 1
                 usemm = 1
@@ -125,6 +141,7 @@ def find_user_file():
 def main():
     file_name = find_user_file()
     if file_name:
+
         process_file(file_name)
 
 if __name__ == "__main__":
