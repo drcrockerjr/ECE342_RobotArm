@@ -158,19 +158,8 @@ tab1 = [
 tab2 = [
         [sg.Text('Enter drawing interactive parameters', key='db_text')],
 
-        [sg.Text('Color Palette (6 digit hex)', size=(40, 1), key='color_txt'),
-            sg.Input(size=(13, 1), key='color1', default_text="0000FF"),
-            sg.Input(size=(13, 1), key='color2', default_text="00FF00"),
-            sg.Input(size=(13, 1), key='color3', default_text="FF0000")],
-
         [sg.Text('Granularity (float between 1 and 50)', size=(40, 1), key='gran_txt'),
             sg.Input(key='granularity', default_text="1")],
-
-        [sg.Text('Max Lines (int between 1 and 1000)', size=(40, 1)), sg.Input(key='maxlines', default_text="100")],
-
-        [sg.Text('Paper Size in mm (int in [10, 279], int in [10, 215])', size=(40, 1), key='paper_txt'),
-            sg.Input(size=(21, 1), key='dim1', default_text="279"),
-            sg.Input(size=(21, 1), key='dim2', default_text="215")],
 
         [sg.Button('Apply', key='apply')],
         [sg.Text('Robot Arm Visualization:', key='visual_txt')],
@@ -197,12 +186,12 @@ layout = [
 #Serial Configuarations
 
 #MacOS example
-com = '/dev/tty.usbmodem14201'  # Serial Communication Port to send data over (example for macOS).
-baud = 9600                   # Baud rate to use
+#com = '/dev/tty.usbmodem14201'  # Serial Communication Port to send data over (example for macOS).
 
 #Windows Example
-#com = 'COM4'                    # Serial Communication Port to send data over.
-#baud = 9600                   # baud rate to use
+com = 'COM4'                    # Serial Communication Port to send data over.
+
+baud = 9600                   # baud rate to use
 
 
 arm = Arm2Link( 142.875, 173.355, 300, 0, 1.8, 1.8)  # Initialize the arm with the graph element
@@ -257,7 +246,7 @@ while True:
     elif event == 'connect_serial':
         try:
             arduino_serial = serial.Serial(com, baud,
-                                        timeout=2.5,
+                                        timeout=None,
                                         #parity=serial.PARITY_NONE,
                                         bytesize=serial.EIGHTBITS,
                                         #stopbits=serial.STOPBITS_ONE
