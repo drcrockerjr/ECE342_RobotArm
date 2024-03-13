@@ -21,8 +21,11 @@ class Arm2Link:
         self.base_y = base_y
         self.end_x = base_x + 10
         self.end_y = base_y + 10
+
         self.q1 = 0  # Angle of the first link
         self.q2 = 0  # Angle of the second link
+
+        self.q1_draw = self.q2_draw = 0
 
         # Stepper motor angles moved per step:
         #   Nema 17 - 1.8 degrees
@@ -35,7 +38,7 @@ class Arm2Link:
         #self.end_x_delta = 0
         #self.end_y_delta = 0
 
-        self.resolution_constant = 0.1
+        self.resolution_constant = 0.2
 
         self.delta_lock = threading.Lock()
 
@@ -50,16 +53,10 @@ class Arm2Link:
         self.end_x = x
         self.end_y = y
 
-    def calculate_drawing_angles(self, graph, new_end_x, new_end_y, move_que):
+    def calculate_drawing_angles(self, graph, new_end_x, new_end_y):
 
         old_x = self.end_x
         old_y = self.end_y
-
-        self.end_x = new_end_x
-        self.end_y = new_end_y
-
-        q1_buf = 0 
-        q2_buf = 0
 
         target_coords = []
 
@@ -75,7 +72,7 @@ class Arm2Link:
         
         num_steps = max(int(distance_to_new_endeff * self.resolution_constant), 1)  # Ensure num_steps is at least 1
 
-        deltaX = (self.end_x - old_x) / num_steps
+        deltaX = (new_end_x - old_x) / num_steps
         deltaY = (self.end_y - old_y) / num_steps
 
         for i in range(1, num_steps + 1):  # Include final point in the loop
@@ -83,14 +80,11 @@ class Arm2Link:
             step_y = (i * deltaY) + old_y
             target_coords.append((step_x, step_y))
 
-        target_coords.append((self.end_x, self.end_y))
+        target_coords.append((new_end_x, new_end_y))
 
         print(f"\n\nTotal Coordinates: {len(target_coords)}\n")
 
         for coord in target_coords:
-
-            old_q1 = self.q1
-            old_q2 = self.q2
 
             x, y = coord
 
@@ -101,10 +95,10 @@ class Arm2Link:
             phi = math.atan2(y - self.base_y, x - self.base_x)
             cos_q2 = (r ** 2 - self.len1 ** 2 - self.len2 ** 2) / (2 * self.len1 * self.len2)
             cos_q2 = max(min(cos_q2, 1), -1)  # Clamp cos_q2 to the range [-1, 1]
-            self.q2 = math.acos(cos_q2)
+            self.q2_draw = math.acos(cos_q2)
             sin_q2 = math.sqrt(1 - cos_q2 ** 2)
-            self.q1 = phi - math.atan2((self.len2 * sin_q2), (self.len1 + self.len2 * cos_q2))
-
+            self.q1_draw = phi - math.atan2((self.len2 * sin_q2), (self.len1 + self.len2 * cos_q2))
+            '''
             m1_n = abs(int(round_half_up( ( (old_q1 - self.q1) + q1_buf ) / self.q1_step_angle ) ))
             m2_n = abs(int(round_half_up( ( (old_q2 - self.q2) + q2_buf) / self.q2_step_angle ) ))
 
@@ -132,7 +126,7 @@ class Arm2Link:
             print(data)
             move_que.put(data)
 
-        print("\n\n Coordinates Flushed \n\n ")
+        print("\n\n Coordinates Flushed \n\n ")'''
 
     def calculate_angles_V2(self, graph, new_end_x, new_end_y, move_que):
         old_x = self.end_x
@@ -173,7 +167,7 @@ class Arm2Link:
         for coord in target_coords:
 
             old_q1 = self.q1
-            old_q2 = self.q2
+            old_q2 = self.q1
 
             x, y = coord
 
@@ -224,8 +218,8 @@ class Arm2Link:
         #graph.erase()
 
         # Calculate the joint position based on the angles
-        joint_x = self.base_x + self.len1 * math.cos(self.q1)
-        joint_y = self.base_y + self.len1 * math.sin(self.q1)
+        joint_x = self.base_x + self.len1 * math.cos(self.q1_draw)
+        joint_y = self.base_y + self.len1 * math.sin(self.q1_draw)
 
 
         # Draw the arm: base -> joint -> end effector

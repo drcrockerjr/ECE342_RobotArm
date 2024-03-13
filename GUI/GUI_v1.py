@@ -229,7 +229,7 @@ while True:
             if(current_mouse_event - last_mouse_event >= 100):
                 graph.erase()
 
-                arm.calculate_drawing_angles(graph, x, y, move_buffer)
+                arm.calculate_drawing_angles(graph, x, y)
 
                 draw_centered_rectangle(graph, 400, 300)
                 arm.draw_arm(graph)
