@@ -17,8 +17,12 @@ class Arm2Link:
     def __init__(self, len1, len2, base_x, base_y, q1_step_angle, q2_step_angle ):
         self.len1 = len1
         self.len2 = len2
-        self.base_x = base_x
-        self.base_y = base_y
+        self.draw_base_x = base_x
+        self.base_base_y = base_y
+
+        self.base_x = 0
+        self.base_y = 0
+
         self.end_x = base_x + 10
         self.end_y = base_y + 10
 
@@ -91,8 +95,8 @@ class Arm2Link:
             #draw points of path
             graph.DrawPoint((int(x), int(y)), size=5, color='red')
 
-            r = math.sqrt((x - self.base_x) ** 2 + (y - self.base_y) ** 2)
-            phi = math.atan2(y - self.base_y, x - self.base_x)
+            r = math.sqrt((x - self.draw_base_x) ** 2 + (y - self.draw_base_y) ** 2)
+            phi = math.atan2(y - self.draw_base_y, x - self.draw_base_x)
             cos_q2 = (r ** 2 - self.len1 ** 2 - self.len2 ** 2) / (2 * self.len1 * self.len2)
             cos_q2 = max(min(cos_q2, 1), -1)  # Clamp cos_q2 to the range [-1, 1]
             self.q2_draw = math.acos(cos_q2)
