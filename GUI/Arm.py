@@ -9,6 +9,10 @@ import threading
 #from pprint import pprint
 
 
+def round_half_up(n, decimals=0):
+        multiplier = 10**decimals
+        return math.floor(n * multiplier + 0.5) / multiplier
+
 class Arm2Link:
     def __init__(self, len1, len2, base_x, base_y, q1_step_angle, q2_step_angle ):
         self.len1 = len1
@@ -31,7 +35,7 @@ class Arm2Link:
         #self.end_x_delta = 0
         #self.end_y_delta = 0
 
-        self.resolution_constant = 0.2
+        self.resolution_constant = 0.1
 
         self.delta_lock = threading.Lock()
 
@@ -46,37 +50,89 @@ class Arm2Link:
         self.end_x = x
         self.end_y = y
 
-    def calculate_angles(self, end_x, end_y):
+    def calculate_drawing_angles(self, graph, new_end_x, new_end_y, move_que):
 
         old_x = self.end_x
         old_y = self.end_y
 
-        self.end_x = end_x
-        self.end_y = end_y
+        self.end_x = new_end_x
+        self.end_y = new_end_y
 
-        old_q1 = self.q1
-        old_q2 = self.q2
+        q1_buf = 0 
+        q2_buf = 0
 
-        distance_to_endeff = math.sqrt((end_x - self.base_x)**2 + (end_y - self.base_y)**2)
+        target_coords = []
 
-        if(distance_to_endeff >= (self.len1 + self.len2)):
+        dis_base_to_endeff = math.sqrt((new_end_x - self.base_x) ** 2 + (new_end_y - self.base_y) ** 2)
+
+        distance_to_new_endeff = math.sqrt((new_end_x - old_x) ** 2 + (new_end_y - old_y) ** 2)
+
+        #if mouse pointer is outside of range possible with arm configuration dont draw updated 
+        if dis_base_to_endeff >= (self.len1 + self.len2):
             self.end_x = old_x
             self.end_y = old_y
             return
+        
+        num_steps = max(int(distance_to_new_endeff * self.resolution_constant), 1)  # Ensure num_steps is at least 1
 
-        # Convert end effector position to polar coordinates
-        r = math.sqrt((self.end_x - self.base_x)**2 + (self.end_y - self.base_y)**2)
-        phi = math.atan2(self.end_y - self.base_y, self.end_x - self.base_x)
-        # Using the cosine law to find the angles
-        cos_q2 = (r**2 - self.len1**2 - self.len2**2) / (2 * self.len1 * self.len2)
-        self.q2 = math.acos(cos_q2)  # Angle for the second link
-        sin_q2 = math.sqrt(1 - cos_q2**2)
-        self.q1 = phi - math.atan2((self.len2 * sin_q2), (self.len1 + self.len2 * cos_q2))  # Angle for the first link
+        deltaX = (self.end_x - old_x) / num_steps
+        deltaY = (self.end_y - old_y) / num_steps
 
-        self.q1_delta = self.q1_delta + ( old_q1 - self.q1 )
-        self.q2_delta = self.q2_delta + ( old_q2 - self.q2 )
+        for i in range(1, num_steps + 1):  # Include final point in the loop
+            step_x = (i * deltaX) + old_x
+            step_y = (i * deltaY) + old_y
+            target_coords.append((step_x, step_y))
 
-        #print(self.q1_delta, self.q2_delta)
+        target_coords.append((self.end_x, self.end_y))
+
+        print(f"\n\nTotal Coordinates: {len(target_coords)}\n")
+
+        for coord in target_coords:
+
+            old_q1 = self.q1
+            old_q2 = self.q2
+
+            x, y = coord
+
+            #draw points of path
+            graph.DrawPoint((int(x), int(y)), size=5, color='red')
+
+            r = math.sqrt((x - self.base_x) ** 2 + (y - self.base_y) ** 2)
+            phi = math.atan2(y - self.base_y, x - self.base_x)
+            cos_q2 = (r ** 2 - self.len1 ** 2 - self.len2 ** 2) / (2 * self.len1 * self.len2)
+            cos_q2 = max(min(cos_q2, 1), -1)  # Clamp cos_q2 to the range [-1, 1]
+            self.q2 = math.acos(cos_q2)
+            sin_q2 = math.sqrt(1 - cos_q2 ** 2)
+            self.q1 = phi - math.atan2((self.len2 * sin_q2), (self.len1 + self.len2 * cos_q2))
+
+            m1_n = abs(int(round_half_up( ( (old_q1 - self.q1) + q1_buf ) / self.q1_step_angle ) ))
+            m2_n = abs(int(round_half_up( ( (old_q2 - self.q2) + q2_buf) / self.q2_step_angle ) ))
+
+            #save left over angle needed to traverse for new coordinate instructions
+            q1_buf = abs(((old_q1 - self.q1) + q1_buf) % self.q1_step_angle)
+            q2_buf = abs(((old_q2 - self.q2) + q2_buf) % self.q2_step_angle)
+
+            if (old_q1 - self.q1) <= 0:
+                m1_dir = 0
+            else:
+                m1_dir = 1
+
+            if (old_q2 - self.q2) <= 0:
+                m2_dir = 0
+            else:
+                m2_dir = 1
+
+            data = {}
+            data["m1_n"] = m1_n
+            data["m2_n"] = m2_n
+            data["m1_dir"] = m1_dir
+            data["m2_dir"] = m2_dir
+
+            data = json.dumps(data)
+            print(data)
+            move_que.put(data)
+
+        print("\n\n Coordinates Flushed \n\n ")
 
     def calculate_angles_V2(self, graph, new_end_x, new_end_y, move_que):
         old_x = self.end_x
@@ -110,6 +166,8 @@ class Arm2Link:
             step_y = (i * deltaY) + old_y
             target_coords.append((step_x, step_y))
 
+        target_coords.append((self.end_x, self.end_y))
+
         print(f"\n\nTotal Coordinates: {len(target_coords)}\n")
 
         for coord in target_coords:
@@ -122,44 +180,36 @@ class Arm2Link:
             #draw points of path
             graph.DrawPoint((int(x), int(y)), size=5, color='red')
 
-            r = math.sqrt((x - self.base_x) ** 2 + (y - self.base_y) ** 2)
-            phi = math.atan2(y - self.base_y, x - self.base_x)
+            r = math.sqrt((x - 0) ** 2 + (y - 0) ** 2)
+            phi = math.atan2(y - 0, x - 0)
             cos_q2 = (r ** 2 - self.len1 ** 2 - self.len2 ** 2) / (2 * self.len1 * self.len2)
             cos_q2 = max(min(cos_q2, 1), -1)  # Clamp cos_q2 to the range [-1, 1]
             self.q2 = math.acos(cos_q2)
             sin_q2 = math.sqrt(1 - cos_q2 ** 2)
             self.q1 = phi - math.atan2((self.len2 * sin_q2), (self.len1 + self.len2 * cos_q2))
 
-            m1_n = abs(math.ceil(((old_q1 - self.q1) + q1_buf) / self.q1_step_angle))
-            m2_n = abs(math.ceil(((old_q2 - self.q2) + q2_buf) / self.q2_step_angle))
+            m1_n = abs(int(round_half_up( ( (old_q1 - self.q1) + q1_buf ) / self.q1_step_angle ) ))
+            m2_n = abs(int(round_half_up( ( (old_q2 - self.q2) + q2_buf) / self.q2_step_angle ) ))
 
             #save left over angle needed to traverse for new coordinate instructions
-            q1_buf = abs(math.ceil(((old_q1 - self.q1) + q1_buf) % self.q1_step_angle))
-            q2_buf = abs(math.ceil(((old_q2 - self.q2) + q2_buf) % self.q2_step_angle))
+            q1_buf = abs(((old_q1 - self.q1) + q1_buf) % self.q1_step_angle)
+            q2_buf = abs(((old_q2 - self.q2) + q2_buf) % self.q2_step_angle)
 
             if (old_q1 - self.q1) <= 0:
-                m1_dir = 1
-            else:
                 m1_dir = 0
+            else:
+                m1_dir = 1
 
             if (old_q2 - self.q2) <= 0:
-                m2_dir = 1
-            else:
                 m2_dir = 0
+            else:
+                m2_dir = 1
 
             data = {}
             data["m1_n"] = m1_n
             data["m2_n"] = m2_n
             data["m1_dir"] = m1_dir
             data["m2_dir"] = m2_dir
-
-            '''packet = {
-                "m1_tck":                 "m1_tck": m1_ticks,
-,
-                "m2_tck": m2_ticks,
-                "m1_dir": m1_dir,
-                "m2_dir": m2_dir
-            }'''
 
             data = json.dumps(data)
             print(data)

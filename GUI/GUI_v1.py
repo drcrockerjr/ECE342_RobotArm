@@ -186,15 +186,15 @@ layout = [
 #Serial Configuarations
 
 #MacOS example
-#com = '/dev/tty.usbmodem14201'  # Serial Communication Port to send data over (example for macOS).
+com = '/dev/tty.usbmodem14201'  # Serial Communication Port to send data over (example for macOS).
 
 #Windows Example
-com = 'COM4'                    # Serial Communication Port to send data over.
+#com = 'COM4'                    # Serial Communication Port to send data over.
 
 baud = 9600                   # baud rate to use
 
 
-arm = Arm2Link( 142.875, 173.355, 300, 0, 1.8, 1.8)  # Initialize the arm with the graph element
+arm = Arm2Link( 142.875, 173.355, 300, 100, 1.8, 1.8)  # Initialize the arm with the graph element
 
 move_buffer = MoveBuffer()
 
@@ -229,11 +229,13 @@ while True:
             if(current_mouse_event - last_mouse_event >= 100):
                 graph.erase()
 
-                arm.calculate_angles_V2(graph, x, y, move_buffer)
+                arm.calculate_drawing_angles(graph, x, y, move_buffer)
 
                 draw_centered_rectangle(graph, 400, 300)
                 arm.draw_arm(graph)
                 #print("\n\n Serial Flushed \n\n ")
+
+                arm.calculate_angles_V2(graph, x, y, move_buffer)
 
                 try:
                     move_buffer.flush_to_serial(serial=arduino_serial)
