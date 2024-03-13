@@ -31,7 +31,7 @@ class Arm2Link:
         #self.end_x_delta = 0
         #self.end_y_delta = 0
 
-        self.resolution_constant = 0.1
+        self.resolution_constant = 0.2
 
         self.delta_lock = threading.Lock()
 
@@ -39,6 +39,8 @@ class Arm2Link:
         self.end_x = 0
         self.end_y = 0
 
+    def move_to_zero(self, graph, move_que):
+        self.calculate_angles_V2(graph, 0, 0, move_que)
 
     def set_end_effector_position(self, x, y):
         self.end_x = x
@@ -136,14 +138,14 @@ class Arm2Link:
             q2_buf = abs(math.ceil(((old_q2 - self.q2) + q2_buf) % self.q2_step_angle))
 
             if (old_q1 - self.q1) <= 0:
-                m1_dir = 0
-            else:
                 m1_dir = 1
+            else:
+                m1_dir = 0
 
             if (old_q2 - self.q2) <= 0:
-                m2_dir = 0
-            else:
                 m2_dir = 1
+            else:
+                m2_dir = 0
 
             data = {}
             data["m1_n"] = m1_n

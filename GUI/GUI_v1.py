@@ -174,6 +174,8 @@ tab2 = [
 
         [sg.Button('Apply', key='apply')],
         [sg.Text('Robot Arm Visualization:', key='visual_txt')],
+        [sg.Button('Calibrate', key='calibrate')],
+        [sg.Button('Zero', key='zero')],
 
         [sg.Graph(canvas_size=(600, 400), graph_bottom_left=(0, 0), graph_top_right=(600, 400), background_color='white', key='-GRAPH-', enable_events=True, drag_submits=True)],
 
@@ -195,7 +197,7 @@ layout = [
 #Serial Configuarations
 
 #MacOS example
-com = '/dev/tty.usbmodem14101'  # Serial Communication Port to send data over (example for macOS).
+com = '/dev/tty.usbmodem14201'  # Serial Communication Port to send data over (example for macOS).
 baud = 9600                   # Baud rate to use
 
 #Windows Example
@@ -203,7 +205,7 @@ baud = 9600                   # Baud rate to use
 #baud = 9600                   # baud rate to use
 
 
-arm = Arm2Link( 200, 200, 300, 0, 1.8, 1.8)  # Initialize the arm with the graph element
+arm = Arm2Link( 142.875, 173.355, 300, 0, 1.8, 1.8)  # Initialize the arm with the graph element
 
 move_buffer = MoveBuffer()
 
@@ -267,19 +269,38 @@ while True:
             print(f"An unexpected error occurred: {e}")
 
     elif event == 'sendGcode':
+        target_coords = []
         try:
             file_path = values['browse']
 
             print(f'Sending G-code file {file_path} ...')
 
             if os.path.exists(file_path):
-                process_file(file_path)
+                process_file(file_path, arm.end_x, arm.end_y, target_coords)
             else: 
                 print(f"File not found: {file_path}")
 
         except Exception as e:
             print(f"Error occured: {e}")
-        
+
+        for coord in target_coords: 
+
+            try:
+                x, y = coord
+                arm.calculate_angles_V2(graph, x, y, move_buffer)
+
+                move_buffer.flush_to_serial(serial=arduino_serial)
+                print("\n Flushed to Arduino \n")
+            except Exception as e:
+                print(f"An unexpected error occurred: {e}")
+    
+    elif event == 'calibrate':
+        arm.calibrate()
+
+    elif event == 'zero':
+        arm.move_to_zero(graph, move_buffer)
+
+
 # Close window when loop is broken.
 window.close()
 
