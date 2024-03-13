@@ -36,7 +36,7 @@ import time
 import os
 import cProfile
 import os
-from gCodeInt import process_file, process_movements
+from gCodeInt import process_file, process_movements, filter_commands
 
 from Arm import Arm2Link
 
@@ -115,12 +115,20 @@ def reportSent(success, code):
     else:
         print("Command {} send failed".format(code))
     
+# Function to process manually entered GCode
+
+
+def process_manual_gcode(gcode_input, move_buffer):
+    lines = gcode_input.split('\n')
+    for line in lines:
+        if line.strip():  # Skip empty lines
+            move_buffer.put(line.strip())
 
 
 # GUI theme
 # All default themes available at:
 # https://user-images.githubusercontent.com/46163555/71361827-2a01b880-2562-11ea-9af8-2c264c02c3e8.jpg
-sg.theme('BlueMono')
+sg.theme('DarkAmber')
 
 #cap = cv2.VideoCapture(0)       # select webcam input
 file_path = ""                  # File path in the file browser input box
@@ -183,9 +191,15 @@ tab2 = [
 
 ]
 
+tab3 = [
+    [sg.Text('Enter GCode commands manually:', key='gcode_text')],
+    [sg.Multiline(size=(80, 10), key='gcode_input')],
+    [sg.Button('Execute', key='execute_gcode')]
+]
+
 # Putting everything together into a single window.
 layout = [
-    [sg.TabGroup([[sg.Tab('Main Interface', tab1), sg.Tab('interactive Drawing', tab2)]])],
+    [sg.TabGroup([[sg.Tab('Main Interface', tab1), sg.Tab('interactive Drawing', tab2), sg.Tab('Manual GCode', tab3)]])],
     #[sg.TabGroup([[ sg.Tab('interactive Drawing', tab2)]])],
     [sg.Output(size=(80, 10), font='Verdana 10')],
     [sg.Button('Exit', key='exit')]
@@ -278,6 +292,15 @@ while True:
 
         except Exception as e:
             print(f"Error occured: {e}")
+
+    
+    if event in (None, 'exit'):
+        break
+    elif event == 'execute_gcode':
+        gcode_input = values['gcode_input']
+        process_manual_gcode(gcode_input, move_buffer)
+        filter_commands('gcode_input')
+        print("GCode commands executed.")  
         
 # Close window when loop is broken.
 window.close()
