@@ -186,7 +186,7 @@ layout = [
 #Serial Configuarations
 
 #MacOS example
-com = '/dev/tty.usbmodem14201'  # Serial Communication Port to send data over (example for macOS).
+com = '/dev/tty.usbmodem14101'  # Serial Communication Port to send data over (example for macOS).
 
 #Windows Example
 #com = 'COM4'                    # Serial Communication Port to send data over.
@@ -194,7 +194,7 @@ com = '/dev/tty.usbmodem14201'  # Serial Communication Port to send data over (e
 baud = 9600                   # baud rate to use
 
 
-arm = Arm2Link( 142.875, 173.355, 300, 100, 1.8, 1.8)  # Initialize the arm with the graph element
+arm = Arm2Link( 142.875, 173.355, 300, 25, 1.8, 1.8)  # Initialize the arm with the graph element
 
 move_buffer = MoveBuffer()
 
@@ -226,7 +226,7 @@ while True:
             current_mouse_event = time.time() * 1000 # ms measurement of time when mouse event occurs
 
             #debouncing multiple mouse events
-            if(current_mouse_event - last_mouse_event >= 100):
+            if(current_mouse_event - last_mouse_event >= 200):
                 graph.erase()
 
                 arm.calculate_drawing_angles(graph, x, y)
