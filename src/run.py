@@ -4,7 +4,7 @@
 
 """
     Program:    GUI_v1.py
-    Author:     
+    Author: Douglas Crocker    
     Date:       
 
     Description:

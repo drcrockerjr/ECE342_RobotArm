@@ -6,8 +6,8 @@
 """
 File:   Inverse_Kinematics.py
 Description: A simulation for the SCARA inverse kinematics problem.
-Author:     Thomas Snyder
-Date:       2/5/2020
+Author:     Douglas Crocker
+Date:       2/5/2022
 """
 import numpy as np
 import matplotlib as mpt
